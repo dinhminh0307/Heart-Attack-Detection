@@ -307,4 +307,70 @@ print("p-value:", p)
 
 
 
+# Statistical test for Question 1
+
+# In[15]:
+
+
+from scipy import stats
+from IPython.display import display
+import pandas as pd
+import numpy as np
+
+df = pd.read_csv('Heart_Attack_Cleaned.csv')
+
+sex = df['sex']
+chol = df['cholesterol']
+
+# Map 1 to Male, 0 to Female
+sex_label = sex.map({1:"Male", 0:"Female"}) if set(sex.unique()) <= {0,1} else sex.astype(str)
+male = chol[sex_label == "Male"].dropna().to_numpy()
+female = chol[sex_label == "Female"].dropna().to_numpy()
+
+# Welch's t-test
+t_stat, p_val = stats.ttest_ind(male, female, equal_var = False)
+
+# 95% CI
+mf, mm = female.mean(), male.mean()
+sd_f, sd_m = female.std(ddof = 1), male.std(ddof = 1)
+n_f, n_m = len(female), len(male)
+se = np.sqrt(sd_f**2/n_f + sd_m**2/n_m)
+df_welch = (sd_f**2/n_f + sd_m**2/n_m)**2 / ((sd_f**2/n_f)**2/(n_f-1) + (sd_m**2/n_m)**2/(n_m-1))
+tcrit = stats.t.ppf(0.975, df_welch)
+diff = female.mean() - male.mean()
+ci = (diff - tcrit*se, diff + tcrit*se)
+
+# Hedges' g effect size
+def hedges_g(a, b):
+    na, nb = len(a), len(b)
+    sp = np.sqrt(((na-1)*a.var(ddof=1) + (nb-1)*b.var(ddof=1)) / (na+nb-2))
+    d = (a.mean() - b.mean()) / sp
+    J = 1 - 3/(4*(na+nb)-9)
+    return d*J
+
+# Display statistics in tables
+summary_tbl = pd.DataFrame(
+    {
+        "n": [n_f, n_m],
+        "Mean": [mf, mm],
+        "SD": [sd_f, sd_m],
+    },
+    index=["Female", "Male"],
+).round(3)
+
+test_tbl = pd.DataFrame(
+    {
+        "Welch t": [t_stat],
+        "df (Welch)": [df_welch],
+        "p-value": [p_val],
+        "Mean diff (F−M)": [diff],
+        "95% CI low": [ci[0]],
+        "95% CI high": [ci[1]],
+        "Hedges' g": [hedges_g(female, male)],
+    }
+).round({"Welch t": 3, "df (Welch)": 1, "p-value": 7,
+         "Mean diff (F−M)": 3, "95% CI low": 3, "95% CI high": 3, "Hedges' g": 3})
+
+display(summary_tbl)
+display(test_tbl)
 
